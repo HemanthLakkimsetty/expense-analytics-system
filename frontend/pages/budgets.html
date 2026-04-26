@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Budgets Ã¢â‚¬â€œ Smart Finance Tracker</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body>
+
+<div class="app-wrapper">
+
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon">Ã¢â€šÂ¹</div>
+      <h1>Finance<br>Tracker</h1>
+      <span>Smart Money Manager</span>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-label">Overview</div>
+      <a href="dashboard.html" class="nav-link"><span class="icon">Ã°Å¸â€œÅ </span> Dashboard</a>
+      <div class="nav-label">Manage</div>
+      <a href="transactions.html" class="nav-link"><span class="icon">Ã°Å¸â€™Â¸</span> Transactions</a>
+      <a href="index.html"        class="nav-link"><span class="icon">Ã¢Å¾â€¢</span> Add Transaction</a>
+      <a href="budgets.html"      class="nav-link active"><span class="icon">Ã°Å¸Å½Â¯</span> Budgets</a>
+      <div class="nav-label">Reports</div>
+      <a href="analytics.html"    class="nav-link"><span class="icon">Ã°Å¸â€œË†</span> Analytics</a>
+      <a href="report.html"       class="nav-link"><span class="icon">Ã°Å¸â€œâ€¹</span> Monthly Report</a>
+    </nav>
+  </aside>
+
+  <main class="main-content">
+
+    <div class="page-header">
+      <h2>Budget Limits</h2>
+      <p>Set monthly spending limits per category and track your progress.</p>
+    </div>
+
+    <div id="alert-area"></div>
+
+    <div id="budget-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px;margin-bottom:28px">
+      <div style="grid-column:1/-1"><div class="spinner"></div></div>
+    </div>
+
+    <button class="btn btn-primary" onclick="openModal('add-modal')">
+      Ã¯Â¼â€¹ Add Budget Limit
+    </button>
+
+  </main>
+</div>
+
+<div class="modal-overlay" id="add-modal">
+  <div class="modal">
+    <h3>Add Budget Limit</h3>
+
+    <div class="form-group">
+      <label>Category</label>
+      <select id="add-category">
+        <option value="">Select categoryÃ¢â‚¬Â¦</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Monthly Limit (Ã¢â€šÂ¹)</label>
+      <input type="number" id="add-limit" min="1" step="0.01" placeholder="e.g. 5000" />
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost"   onclick="closeModal('add-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="addBudget()">Save Limit</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal">
+    <h3>Edit Budget Limit</h3>
+    <input type="hidden" id="edit-id" />
+
+    <div class="form-group">
+      <label>Category</label>
+      <input type="text" id="edit-category" readonly style="opacity:.6" />
+    </div>
+    <div class="form-group">
+      <label>Monthly Limit (Ã¢â€šÂ¹)</label>
+      <input type="number" id="edit-limit" min="1" step="0.01" />
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost"   onclick="closeModal('edit-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="updateBudget()">Update</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="delete-modal">
+  <div class="modal" style="max-width:360px">
+    <h3>Remove Budget?</h3>
+    <p style="color:var(--text-secondary);margin-bottom:24px">
+      This removes only the spending limit. Your transaction history is not affected.
+    </p>
+    <input type="hidden" id="delete-id" />
+    <div class="modal-actions">
+      <button class="btn btn-ghost"  onclick="closeModal('delete-modal')">Cancel</button>
+      <button class="btn btn-danger" onclick="confirmDelete()">Remove</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+<script src="../assets/js/app.js"></script>
+<script>
+
+const BUDGET_API = '/FinanceTracker/budget';
+
+async function budgetApi(path, method = 'GET', params = null) {
+  let url = BUDGET_API + path;
+  const options = { method, headers: {} };
+
+  if (params) {
+    const q = new URLSearchParams(params);
+    if (method === 'GET' || method === 'DELETE') url += '?' + q;
+    else { options.headers['Content-Type'] = 'application/x-www-form-urlencoded'; options.body = q; }
+  }
+
+  const res = await fetch(url, options);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+
+let allBudgets      = [];
+let expenseCategories = [];
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadExpenseCategories();
+  await loadBudgets();
+});
+
+async function loadExpenseCategories() {
+  try {
+    const cats = await apiCall('/categories');
+    expenseCategories = cats.filter(c => c.type === 'Expense');
+    const sel = document.getElementById('add-category');
+    expenseCategories.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.name; opt.textContent = c.name;
+      sel.appendChild(opt);
+    });
+  } catch (e) { showToast('Could not load categories', 'error'); }
+}
+
+async function loadBudgets() {
+  try {
+    allBudgets = await budgetApi('/status');
+    renderBudgetCards(allBudgets);
+    renderAlerts(allBudgets);
+  } catch (e) {
+    showToast('Failed to load budgets', 'error');
+    document.getElementById('budget-grid').innerHTML =
+      '<div class="empty-state"><div class="empty-icon">Ã°Å¸Å½Â¯</div><p>No budgets set yet. Add your first budget limit above.</p></div>';
+  }
+}
+
+function renderBudgetCards(budgets) {
+  const grid = document.getElementById('budget-grid');
+
+  if (budgets.length === 0) {
+    grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">Ã°Å¸Å½Â¯</div><p>No budget limits set yet. Click "Add Budget Limit" to start.</p></div>';
+    return;
+  }
+
+  grid.innerHTML = budgets.map(b => {
+    const pct      = Math.min(parseFloat(b.pctUsed) || 0, 100);
+    const over     = b.overBudget;
+    const barColor = over ? 'var(--red)' : pct > 75 ? 'var(--yellow)' : 'var(--green)';
+    const icon     = over ? 'Ã°Å¸â€Â´' : pct > 75 ? 'Ã°Å¸Å¸Â¡' : 'Ã°Å¸Å¸Â¢';
+
+    return `
+    <div class="card" style="position:relative;overflow:hidden">
+
+      <div style="position:absolute;top:0;left:0;right:0;height:3px;background:${barColor}"></div>
+
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+        <div>
+          <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);margin-bottom:3px">Category</div>
+          <div style="font-size:1.05rem;font-weight:600;color:var(--text-primary)">${icon} ${b.category}</div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-ghost btn-sm" onclick="openEditModal(${b.id})">Ã¢Å“ÂÃ¯Â¸Â</button>
+          <button class="btn btn-danger btn-sm" onclick="openDeleteModal(${b.id})">Ã°Å¸â€”â€˜Ã¯Â¸Â</button>
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;margin-bottom:10px">
+        <div>
+          <div style="font-size:.72rem;color:var(--text-muted);margin-bottom:2px">Spent</div>
+          <div style="font-size:1.2rem;font-weight:600;color:${barColor}">${formatCurrency(b.spent)}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:.72rem;color:var(--text-muted);margin-bottom:2px">Limit</div>
+          <div style="font-size:1.2rem;font-weight:600;color:var(--text-secondary)">${formatCurrency(b.monthlyLimit)}</div>
+        </div>
+      </div>
+
+      <div style="background:var(--bg-base);border-radius:20px;height:6px;margin-bottom:8px;overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:${barColor};border-radius:20px;transition:.5s ease"></div>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--text-muted)">
+        <span>${pct.toFixed(1)}% used</span>
+        <span>${over ? 'Ã¢Å¡Â Ã¯Â¸Â Over budget by ' + formatCurrency(Math.abs(b.remaining)) : 'Remaining: ' + formatCurrency(b.remaining)}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderAlerts(budgets) {
+  const overBudget = budgets.filter(b => b.overBudget);
+  const area = document.getElementById('alert-area');
+  if (overBudget.length === 0) { area.innerHTML = ''; return; }
+
+  area.innerHTML = `
+    <div class="insight-banner budget-warning" style="margin-bottom:20px;flex-direction:column;align-items:flex-start;gap:6px">
+      <strong>Ã¢Å¡Â Ã¯Â¸Â ${overBudget.length} budget${overBudget.length > 1 ? 's' : ''} exceeded this month:</strong>
+      ${overBudget.map(b =>
+        `<span>Ã¢â‚¬Â¢ <strong>${b.category}</strong> - spent ${formatCurrency(b.spent)} of ${formatCurrency(b.monthlyLimit)} limit</span>`
+      ).join('')}
+    </div>`;
+}
+
+async function addBudget() {
+  const category = document.getElementById('add-category').value;
+  const limit    = document.getElementById('add-limit').value;
+
+  if (!category || !limit || parseFloat(limit) <= 0) {
+    showToast('Please select a category and enter a positive limit.', 'error');
+    return;
+  }
+
+  if (allBudgets.some(b => b.category === category)) {
+    showToast(`A budget for "${category}" already exists. Edit it instead.`, 'error');
+    return;
+  }
+
+  try {
+    await budgetApi('/add', 'POST', { category, monthly_limit: limit });
+    closeModal('add-modal');
+    showToast('Budget limit saved! Ã°Å¸Å½Â¯', 'success');
+    document.getElementById('add-category').value = '';
+    document.getElementById('add-limit').value    = '';
+    await loadBudgets();
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  }
+}
+
+function openEditModal(id) {
+  const b = allBudgets.find(x => x.id === id);
+  if (!b) return;
+  document.getElementById('edit-id').value       = b.id;
+  document.getElementById('edit-category').value = b.category;
+  document.getElementById('edit-limit').value    = b.monthlyLimit;
+  openModal('edit-modal');
+}
+
+async function updateBudget() {
+  const id    = document.getElementById('edit-id').value;
+  const limit = document.getElementById('edit-limit').value;
+  const cat   = document.getElementById('edit-category').value;
+
+  if (!limit || parseFloat(limit) <= 0) {
+    showToast('Enter a valid limit amount.', 'error'); return;
+  }
+
+  try {
+    await budgetApi('/update', 'PUT', { id, category: cat, monthly_limit: limit });
+    closeModal('edit-modal');
+    showToast('Budget updated!', 'success');
+    await loadBudgets();
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  }
+}
+
+function openDeleteModal(id) {
+  document.getElementById('delete-id').value = id;
+  openModal('delete-modal');
+}
+
+async function confirmDelete() {
+  const id = document.getElementById('delete-id').value;
+  try {
+    await budgetApi('/delete', 'DELETE', { id });
+    closeModal('delete-modal');
+    showToast('Budget limit removed.', 'info');
+    await loadBudgets();
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  }
+}
+
+</script>
+</body>
+</html>

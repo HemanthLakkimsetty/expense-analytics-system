@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Analytics Ã¢â‚¬â€œ Smart Finance Tracker</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<div class="app-wrapper">
+
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon">Ã¢â€šÂ¹</div>
+      <h1>Finance<br>Tracker</h1>
+      <span>Smart Money Manager</span>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-label">Overview</div>
+      <a href="dashboard.html" class="nav-link"><span class="icon">Ã°Å¸â€œÅ </span> Dashboard</a>
+      <div class="nav-label">Manage</div>
+      <a href="transactions.html" class="nav-link"><span class="icon">Ã°Å¸â€™Â¸</span> Transactions</a>
+      <a href="index.html"        class="nav-link"><span class="icon">Ã¢Å¾â€¢</span> Add Transaction</a>
+      <a href="budgets.html"      class="nav-link"><span class="icon">Ã°Å¸Å½Â¯</span> Budgets</a>
+      <div class="nav-label">Reports</div>
+      <a href="analytics.html"    class="nav-link active"><span class="icon">Ã°Å¸â€œË†</span> Analytics</a>
+      <a href="report.html"       class="nav-link"><span class="icon">Ã°Å¸â€œâ€¹</span> Monthly Report</a>
+    </nav>
+  </aside>
+
+  <main class="main-content">
+
+    <div class="page-header">
+      <h2>Analytics</h2>
+      <p>Deep-dive into your spending patterns and financial trends.</p>
+    </div>
+
+    <div id="insights-row" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:28px">
+      <div class="spinner" style="grid-column:1/-1"></div>
+    </div>
+
+    <div class="charts-grid">
+      <div class="card">
+        <div class="card-title">6-Month Income vs Expense</div>
+        <canvas id="chart-monthly" height="230"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-title">Expense by Category</div>
+        <canvas id="chart-category" height="230"></canvas>
+      </div>
+    </div>
+
+    <div class="charts-grid">
+      <div class="card">
+        <div class="card-title">Monthly Savings</div>
+        <canvas id="chart-savings" height="230"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-title">Budget Usage This Month</div>
+        <canvas id="chart-budget" height="230"></canvas>
+      </div>
+    </div>
+
+    <div class="card" style="display:flex;align-items:center;justify-content:space-between;padding:18px 24px">
+      <div>
+        <div style="font-weight:600;margin-bottom:3px">Export Your Data</div>
+        <div style="color:var(--text-muted);font-size:.85rem">Download all transactions as a CSV file for use in Excel or Google Sheets.</div>
+      </div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-ghost" onclick="exportCSV('Income')">Ã¢Â¬â€¡ Income CSV</button>
+        <button class="btn btn-ghost" onclick="exportCSV('Expense')">Ã¢Â¬â€¡ Expense CSV</button>
+        <button class="btn btn-primary" onclick="exportCSV('')">Ã¢Â¬â€¡ All Transactions</button>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<div id="toast-container"></div>
+<script src="../assets/js/app.js"></script>
+<script>
+
+const COLORS = ['#26c980','#4fa8f0','#f5b942','#f05050','#a78bfa','#fb7185','#34d399','#60a5fa'];
+const EXPORT_BASE = '/FinanceTracker/export/csv';
+const BUDGET_API  = '/FinanceTracker/budget/status';
+
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const [monthly, categories, budgets] = await Promise.all([
+      apiCall('/analytics/monthly'),
+      apiCall('/analytics/category'),
+      fetch(BUDGET_API).then(r => r.json())
+    ]);
+
+    renderInsights(monthly, categories);
+    renderMonthlyChart(monthly);
+    renderCategoryChart(categories);
+    renderSavingsChart(monthly);
+    renderBudgetChart(budgets);
+  } catch (e) {
+    showToast('Failed to load analytics', 'error');
+    console.error(e);
+  }
+});
+
+function renderInsights(monthly, categories) {
+  const row = document.getElementById('insights-row');
+
+  const avgExpense = monthly.length
+    ? monthly.reduce((s,m) => s + (parseFloat(m.expense)||0), 0) / monthly.length : 0;
+
+  const entries = Object.entries(categories);
+  const topCat  = entries.length ? entries.sort((a,b) => b[1]-a[1])[0] : ['N/A', 0];
+
+  const last = monthly[monthly.length - 1];
+  const inc  = parseFloat(last?.income)  || 0;
+  const exp  = parseFloat(last?.expense) || 0;
+  const rate = inc > 0 ? ((inc - exp) / inc * 100).toFixed(1) : 0;
+
+  row.innerHTML = `
+    <div class="stat-card income" style="margin:0">
+      <div class="stat-label">Avg Monthly Expense</div>
+      <div class="stat-value">${formatCurrency(avgExpense)}</div>
+      <div class="stat-sub">Over last ${monthly.length} months</div>
+    </div>
+    <div class="stat-card expense" style="margin:0">
+      <div class="stat-label">Top Spending Category</div>
+      <div class="stat-value" style="font-size:1.3rem">${topCat[0]}</div>
+      <div class="stat-sub">${formatCurrency(topCat[1])} total spent</div>
+    </div>
+    <div class="stat-card cashflow" style="margin:0">
+      <div class="stat-label">Last Month Savings Rate</div>
+      <div class="stat-value">${rate}%</div>
+      <div class="stat-sub">${rate >= 20 ? 'Ã¢Å“â€¦ Great savings!' : rate >= 10 ? 'Ã¢Å¡Â Ã¯Â¸Â Could be better' : 'Ã¢ÂÅ’ Needs attention'}</div>
+    </div>`;
+}
+
+function renderMonthlyChart(monthly) {
+  const labels   = monthly.map(d => {
+    const [y, m] = d.month.split('-');
+    return new Date(y, m-1).toLocaleDateString('en-IN', {month:'short', year:'2-digit'});
+  });
+
+  new Chart(document.getElementById('chart-monthly'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Income',  data: monthly.map(d => parseFloat(d.income)||0),  backgroundColor: 'rgba(38,201,128,.75)', borderRadius: 5 },
+        { label: 'Expense', data: monthly.map(d => parseFloat(d.expense)||0), backgroundColor: 'rgba(240,80,80,.75)',  borderRadius: 5 }
+      ]
+    },
+    options: chartOptions('bar')
+  });
+}
+
+function renderCategoryChart(cats) {
+  const labels = Object.keys(cats);
+  const values = Object.values(cats).map(v => parseFloat(v)||0);
+
+  if (!labels.length) {
+    document.getElementById('chart-category').parentElement.innerHTML +=
+      '<p style="color:var(--text-muted);text-align:center;font-size:.85rem;margin-top:8px">No expense data</p>';
+    return;
+  }
+
+  new Chart(document.getElementById('chart-category'), {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data: values, backgroundColor: COLORS, borderWidth: 0, hoverOffset: 8 }] },
+    options: {
+      cutout: '58%',
+      plugins: {
+        legend: { position: 'bottom', labels: { color:'#8892aa', font:{ family:'DM Sans' }, padding: 10 } },
+        tooltip: { callbacks: { label: ctx => ` Ã¢â€šÂ¹${ctx.parsed.toLocaleString('en-IN',{minimumFractionDigits:2})}` } }
+      }
+    }
+  });
+}
+
+function renderSavingsChart(monthly) {
+  const labels  = monthly.map(d => {
+    const [y,m] = d.month.split('-');
+    return new Date(y,m-1).toLocaleDateString('en-IN',{month:'short',year:'2-digit'});
+  });
+  const savings = monthly.map(d => (parseFloat(d.income)||0) - (parseFloat(d.expense)||0));
+
+  new Chart(document.getElementById('chart-savings'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Savings',
+        data: savings,
+        borderColor: '#26c980',
+        backgroundColor: 'rgba(38,201,128,0.08)',
+        fill: true,
+        tension: 0.4,
+        pointBackgroundColor: '#26c980',
+        pointRadius: 5
+      }]
+    },
+    options: chartOptions('line')
+  });
+}
+
+function renderBudgetChart(budgets) {
+  if (!budgets || !budgets.length) {
+    document.getElementById('chart-budget').parentElement.innerHTML +=
+      '<p style="color:var(--text-muted);text-align:center;font-size:.85rem;margin-top:8px">No budgets configured yet</p>';
+    return;
+  }
+
+  const labels = budgets.map(b => b.category);
+  const spent  = budgets.map(b => parseFloat(b.spent) || 0);
+  const limits = budgets.map(b => parseFloat(b.monthlyLimit) || 0);
+  const barColors = budgets.map(b => b.overBudget ? 'rgba(240,80,80,.8)' : parseFloat(b.pctUsed) > 75 ? 'rgba(245,185,66,.8)' : 'rgba(38,201,128,.8)');
+
+  new Chart(document.getElementById('chart-budget'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Spent', data: spent, backgroundColor: barColors, borderRadius: 4 },
+        { label: 'Limit', data: limits, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 4 }
+      ]
+    },
+    options: { ...chartOptions('bar'), indexAxis: 'y' }
+  });
+}
+
+function chartOptions(type) {
+  return {
+    responsive: true,
+    plugins: {
+      legend: { labels: { color: '#8892aa', font: { family: 'DM Sans' } } },
+      tooltip: { callbacks: { label: ctx => ` Ã¢â€šÂ¹${(ctx.parsed.y ?? ctx.parsed).toLocaleString('en-IN',{minimumFractionDigits:2})}` } }
+    },
+    scales: type === 'bar' || type === 'line' ? {
+      x: { ticks: { color: '#505870' }, grid: { color: '#252935' } },
+      y: { ticks: { color: '#505870', callback: v => 'Ã¢â€šÂ¹' + v.toLocaleString('en-IN') }, grid: { color: '#252935' } }
+    } : {}
+  };
+}
+
+function exportCSV(type) {
+  let url = EXPORT_BASE;
+  if (type) url += '?type=' + encodeURIComponent(type);
+  window.location.href = url;   
+  showToast('Downloading CSVÃ¢â‚¬Â¦', 'info');
+}
+
+</script>
+</body>
+</html>

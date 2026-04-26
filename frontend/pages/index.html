@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Add Transaction Ã¢â‚¬â€œ Smart Finance Tracker</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body>
+
+<div class="app-wrapper">
+
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon">Ã¢â€šÂ¹</div>
+      <h1>Finance<br>Tracker</h1>
+      <span>Smart Money Manager</span>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-label">Overview</div>
+      <a href="dashboard.html" class="nav-link">
+        <span class="icon">Ã°Å¸â€œÅ </span> Dashboard
+      </a>
+      <div class="nav-label">Manage</div>
+      <a href="transactions.html" class="nav-link">
+        <span class="icon">Ã°Å¸â€™Â¸</span> Transactions
+      </a>
+      <a href="index.html" class="nav-link active">
+        <span class="icon">Ã¢Å¾â€¢</span> Add Transaction
+      </a>
+    </nav>
+  </aside>
+
+  <main class="main-content">
+
+    <div class="page-header">
+      <h2>Add Transaction</h2>
+      <p>Record a new income or expense entry.</p>
+    </div>
+
+    <div id="budget-warning" style="display:none" class="insight-banner budget-warning">
+      Ã¢Å¡Â Ã¯Â¸Â <span id="budget-warning-text"></span>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 380px;gap:24px;align-items:start">
+
+      <div class="card">
+        <div class="card-title">Transaction Details</div>
+
+        <div style="display:flex;gap:10px;margin-bottom:24px">
+          <button id="btn-income"  class="btn btn-primary" style="flex:1" onclick="setType('Income')">
+            Ã¢Â¬â€  Income
+          </button>
+          <button id="btn-expense" class="btn btn-ghost"   style="flex:1" onclick="setType('Expense')">
+            Ã¢Â¬â€¡ Expense
+          </button>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Date *</label>
+            <input type="date" id="txn-date" required />
+          </div>
+          <div class="form-group">
+            <label>Amount (Ã¢â€šÂ¹) *</label>
+            <input type="number" id="txn-amount" min="0.01" step="0.01" placeholder="0.00"
+                   oninput="checkBudget()" required />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Category *</label>
+          <select id="txn-category" onchange="checkBudget()">
+            <option value="">Select categoryÃ¢â‚¬Â¦</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Description</label>
+          <textarea id="txn-description" placeholder="Optional note about this transactionÃ¢â‚¬Â¦"></textarea>
+        </div>
+
+        <button class="btn btn-primary" style="width:100%;justify-content:center;padding:14px"
+                onclick="submitTransaction()">
+          Ã¢Å“â€œ Save Transaction
+        </button>
+      </div>
+
+      <div>
+        <div class="card">
+          <div class="card-title" style="font-size:.95rem">This Month</div>
+
+          <div style="margin-bottom:16px">
+            <div style="font-size:.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Income</div>
+            <div id="month-income" style="font-size:1.4rem;color:var(--green);font-weight:600">-</div>
+          </div>
+
+          <div style="margin-bottom:16px">
+            <div style="font-size:.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Expense</div>
+            <div id="month-expense" style="font-size:1.4rem;color:var(--red);font-weight:600">-</div>
+          </div>
+
+          <div>
+            <div style="font-size:.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Balance</div>
+            <div id="month-balance" style="font-size:1.4rem;font-weight:600">-</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title" style="font-size:.95rem">Budget Status</div>
+          <div id="budget-list">
+            <div class="spinner"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+</div>
+
+<div id="toast-container"></div>
+
+<script src="../assets/js/app.js"></script>
+<script>
+
+  let currentType = 'Income';
+  let allCategories = [];
+
+  document.addEventListener('DOMContentLoaded', async () => {
+
+    document.getElementById('txn-date').value = new Date().toISOString().slice(0, 10);
+
+    await loadCategories();
+    populateCategories();
+    loadMonthSummary();
+    loadBudgetStatus();
+  });
+
+  function setType(type) {
+    currentType = type;
+    document.getElementById('btn-income').className  = type === 'Income'  ? 'btn btn-primary' : 'btn btn-ghost';
+    document.getElementById('btn-expense').className = type === 'Expense' ? 'btn btn-primary' : 'btn btn-ghost';
+    populateCategories();
+    checkBudget();
+  }
+
+  async function loadCategories() {
+    try {
+      allCategories = await apiCall('/categories');
+    } catch (e) {
+      showToast('Could not load categories', 'error');
+    }
+  }
+
+  function populateCategories() {
+    const select   = document.getElementById('txn-category');
+    const filtered = allCategories.filter(c => c.type === currentType);
+    select.innerHTML =
+      '<option value="">Select categoryÃ¢â‚¬Â¦</option>' +
+      filtered.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+  }
+
+  async function submitTransaction() {
+    const date        = document.getElementById('txn-date').value;
+    const amount      = document.getElementById('txn-amount').value;
+    const category    = document.getElementById('txn-category').value;
+    const description = document.getElementById('txn-description').value;
+
+    if (!date || !amount || !category) {
+      showToast('Please fill in all required fields.', 'error');
+      return;
+    }
+    if (parseFloat(amount) <= 0) {
+      showToast('Amount must be greater than zero.', 'error');
+      return;
+    }
+
+    try {
+      await apiCall('/transactions', 'POST', {
+        date, type: currentType, category, amount, description
+      });
+
+      showToast('Transaction saved successfully! Ã°Å¸Å½â€°', 'success');
+
+      document.getElementById('txn-amount').value      = '';
+      document.getElementById('txn-category').value    = '';
+      document.getElementById('txn-description').value = '';
+      document.getElementById('txn-date').value        = new Date().toISOString().slice(0, 10);
+      hideBudgetWarning();
+
+      loadMonthSummary();
+      loadBudgetStatus();
+
+    } catch (e) {
+      showToast('Error: ' + e.message, 'error');
+    }
+  }
+
+  async function loadMonthSummary() {
+    try {
+      const monthly = await apiCall('/analytics/monthly');
+      const now     = new Date();
+      const key     = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      const thisMonth = monthly.find(m => m.month === key) || { income: 0, expense: 0 };
+
+      const inc = parseFloat(thisMonth.income)  || 0;
+      const exp = parseFloat(thisMonth.expense) || 0;
+      const bal = inc - exp;
+
+      document.getElementById('month-income').textContent  = formatCurrency(inc);
+      document.getElementById('month-expense').textContent = formatCurrency(exp);
+      const balEl = document.getElementById('month-balance');
+      balEl.textContent = formatCurrency(bal);
+      balEl.style.color = bal >= 0 ? 'var(--green)' : 'var(--red)';
+    } catch (e) {  }
+  }
+
+  async function loadBudgetStatus() {
+    try {
+      const catData = await apiCall('/analytics/category');
+      const container = document.getElementById('budget-list');
+
+      const budgetMap = {
+        'Food': 5000, 'Transport': 2000,
+        'Entertainment': 2000, 'Shopping': 5000, 'Utilities': 3000
+      };
+
+      let html = '';
+      for (const [cat, limit] of Object.entries(budgetMap)) {
+        const spent = parseFloat(catData[cat]) || 0;
+        const pct   = Math.min((spent / limit) * 100, 100).toFixed(0);
+        const over  = spent > limit;
+        const color = over ? 'var(--red)' : pct > 75 ? 'var(--yellow)' : 'var(--green)';
+
+        html += `
+          <div style="margin-bottom:14px">
+            <div style="display:flex;justify-content:space-between;font-size:.82rem;margin-bottom:5px">
+              <span style="color:var(--text-secondary)">${cat}</span>
+              <span style="color:${color}">${formatCurrency(spent)} / ${formatCurrency(limit)}</span>
+            </div>
+            <div style="background:var(--bg-base);border-radius:20px;height:5px;overflow:hidden">
+              <div style="height:100%;width:${pct}%;background:${color};border-radius:20px;transition:.4s"></div>
+            </div>
+          </div>`;
+      }
+
+      container.innerHTML = html || '<p style="color:var(--text-muted);font-size:.85rem">No budgets configured.</p>';
+    } catch (e) {  }
+  }
+
+  async function checkBudget() {
+    if (currentType !== 'Expense') { hideBudgetWarning(); return; }
+
+    const category = document.getElementById('txn-category').value;
+    const amount   = parseFloat(document.getElementById('txn-amount').value) || 0;
+    if (!category || amount <= 0) { hideBudgetWarning(); return; }
+
+    const budgetMap = {
+      'Food': 5000, 'Transport': 2000,
+      'Entertainment': 2000, 'Shopping': 5000, 'Utilities': 3000
+    };
+    const limit = budgetMap[category];
+    if (!limit) { hideBudgetWarning(); return; }
+
+    try {
+      const catData = await apiCall('/analytics/category');
+      const spent   = (parseFloat(catData[category]) || 0) + amount;
+      if (spent > limit) {
+        showBudgetWarning(
+          `Adding this will put your ${category} spending at ${formatCurrency(spent)}, ` +
+          `exceeding your monthly limit of ${formatCurrency(limit)}.`
+        );
+      } else {
+        hideBudgetWarning();
+      }
+    } catch (e) { hideBudgetWarning(); }
+  }
+
+  function showBudgetWarning(msg) {
+    const w = document.getElementById('budget-warning');
+    document.getElementById('budget-warning-text').textContent = msg;
+    w.style.display = 'flex';
+  }
+
+  function hideBudgetWarning() {
+    document.getElementById('budget-warning').style.display = 'none';
+  }
+
+</script>
+</body>
+</html>

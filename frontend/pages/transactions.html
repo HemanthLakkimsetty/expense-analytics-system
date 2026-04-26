@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Transactions Ã¢â‚¬â€œ Smart Finance Tracker</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body>
+
+<div class="app-wrapper">
+
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon">Ã¢â€šÂ¹</div>
+      <h1>Finance<br>Tracker</h1>
+      <span>Smart Money Manager</span>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-label">Overview</div>
+      <a href="dashboard.html" class="nav-link">
+        <span class="icon">Ã°Å¸â€œÅ </span> Dashboard
+      </a>
+      <div class="nav-label">Manage</div>
+      <a href="transactions.html" class="nav-link active">
+        <span class="icon">Ã°Å¸â€™Â¸</span> Transactions
+      </a>
+      <a href="index.html"     class="nav-link"><span class="icon">Ã¢Å¾â€¢</span> Add Transaction</a>
+      <a href="budgets.html"   class="nav-link"><span class="icon">Ã°Å¸Å½Â¯</span> Budgets</a>
+      <div class="nav-label">Reports</div>
+      <a href="analytics.html" class="nav-link"><span class="icon">Ã°Å¸â€œË†</span> Analytics</a>
+      <a href="report.html"    class="nav-link"><span class="icon">Ã°Å¸â€œâ€¹</span> Monthly Report</a>
+    </nav>
+  </aside>
+
+  <main class="main-content">
+
+    <div class="page-header">
+      <h2>All Transactions</h2>
+      <p>View, filter, edit, or delete your financial records.</p>
+    </div>
+
+    <div class="filter-bar">
+      <select id="filter-type" onchange="applyFilters()">
+        <option value="">All Types</option>
+        <option value="Income">Income</option>
+        <option value="Expense">Expense</option>
+      </select>
+
+      <select id="filter-category" onchange="applyFilters()">
+        <option value="">All Categories</option>
+      </select>
+
+      <button class="btn btn-ghost btn-sm" onclick="clearFilters()">Ã¢Å“â€¢ Clear</button>
+
+      <span id="record-count" style="margin-left:auto;color:var(--text-muted);font-size:.85rem"></span>
+
+      <a href="index.html" class="btn btn-primary btn-sm">Ã¯Â¼â€¹ Add New</a>
+    </div>
+
+    <div class="card" style="padding:0">
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Date</th>
+              <th>Type</th>
+              <th>Category</th>
+              <th>Amount</th>
+              <th>Description</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="transactions-body">
+            <tr><td colspan="7"><div class="spinner"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal">
+    <h3>Edit Transaction</h3>
+    <input type="hidden" id="edit-id" />
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Date</label>
+        <input type="date" id="edit-date" required />
+      </div>
+      <div class="form-group">
+        <label>Type</label>
+        <select id="edit-type" onchange="populateEditCategories()">
+          <option value="Income">Income</option>
+          <option value="Expense">Expense</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Category</label>
+        <select id="edit-category"></select>
+      </div>
+      <div class="form-group">
+        <label>Amount (Ã¢â€šÂ¹)</label>
+        <input type="number" id="edit-amount" min="0.01" step="0.01" placeholder="0.00" />
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Description</label>
+      <textarea id="edit-description" placeholder="Optional note..."></textarea>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('edit-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEdit()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="delete-modal">
+  <div class="modal" style="max-width:360px">
+    <h3>Delete Transaction?</h3>
+    <p style="color:var(--text-secondary);margin-bottom:24px">
+      This action cannot be undone. The transaction will be permanently removed.
+    </p>
+    <input type="hidden" id="delete-id" />
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('delete-modal')">Cancel</button>
+      <button class="btn btn-danger" onclick="confirmDelete()">Yes, Delete</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script src="../assets/js/app.js"></script>
+<script>
+
+  let allCategories = [];
+  let allTransactions = [];
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    await loadCategories();
+    await loadTransactions();
+  });
+
+  async function loadCategories() {
+    try {
+      allCategories = await apiCall('/categories');
+
+      const filterSelect = document.getElementById('filter-category');
+      allCategories.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.name;
+        opt.textContent = c.name;
+        filterSelect.appendChild(opt);
+      });
+    } catch (e) {
+      console.error('Failed to load categories', e);
+    }
+  }
+
+  async function loadTransactions() {
+    const type     = document.getElementById('filter-type').value;
+    const category = document.getElementById('filter-category').value;
+
+    const params = {};
+    if (type)     params.type     = type;
+    if (category) params.category = category;
+
+    try {
+      const data = await apiCall('/transactions', 'GET', Object.keys(params).length ? params : null);
+      allTransactions = data;
+      renderTable(data);
+    } catch (e) {
+      showToast('Failed to load transactions', 'error');
+    }
+  }
+
+  function renderTable(transactions) {
+    const tbody = document.getElementById('transactions-body');
+    document.getElementById('record-count').textContent =
+      `${transactions.length} record${transactions.length !== 1 ? 's' : ''}`;
+
+    if (transactions.length === 0) {
+      tbody.innerHTML = `
+        <tr><td colspan="7">
+          <div class="empty-state">
+            <div class="empty-icon">Ã°Å¸â€”â€šÃ¯Â¸Â</div>
+            <p>No transactions found. Try changing the filters.</p>
+          </div>
+        </td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = transactions.map((t, i) => `
+      <tr>
+        <td style="color:var(--text-muted)">${i + 1}</td>
+        <td>${formatDate(t.date)}</td>
+        <td><span class="type-badge ${t.type.toLowerCase()}">${t.type}</span></td>
+        <td>${t.category}</td>
+        <td class="amount-${t.type.toLowerCase()}">${formatCurrency(t.amount)}</td>
+        <td style="color:var(--text-muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          ${t.description || '-'}
+        </td>
+        <td>
+          <button class="btn btn-ghost btn-sm" onclick="openEditModal(${t.id})">Ã¢Å“ÂÃ¯Â¸Â Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="openDeleteModal(${t.id})">Ã°Å¸â€”â€˜Ã¯Â¸Â</button>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  function applyFilters()  { loadTransactions(); }
+  function clearFilters() {
+    document.getElementById('filter-type').value     = '';
+    document.getElementById('filter-category').value = '';
+    loadTransactions();
+  }
+
+  function openEditModal(id) {
+    const t = allTransactions.find(tx => tx.id === id);
+    if (!t) return;
+
+    document.getElementById('edit-id').value           = t.id;
+    document.getElementById('edit-date').value         = t.date;
+    document.getElementById('edit-type').value         = t.type;
+    document.getElementById('edit-amount').value       = t.amount;
+    document.getElementById('edit-description').value  = t.description || '';
+
+    populateEditCategories(t.category);
+    openModal('edit-modal');
+  }
+
+  function populateEditCategories(selectedCategory) {
+    const type     = document.getElementById('edit-type').value;
+    const select   = document.getElementById('edit-category');
+    const filtered = allCategories.filter(c => c.type === type);
+
+    select.innerHTML = filtered.map(c =>
+      `<option value="${c.name}" ${c.name === selectedCategory ? 'selected' : ''}>${c.name}</option>`
+    ).join('');
+  }
+
+  async function saveEdit() {
+    const id = document.getElementById('edit-id').value;
+    const params = {
+      id,
+      date:        document.getElementById('edit-date').value,
+      type:        document.getElementById('edit-type').value,
+      category:    document.getElementById('edit-category').value,
+      amount:      document.getElementById('edit-amount').value,
+      description: document.getElementById('edit-description').value
+    };
+
+    try {
+      await apiCall('/transactions', 'PUT', params);
+      closeModal('edit-modal');
+      showToast('Transaction updated!', 'success');
+      loadTransactions();
+    } catch (e) {
+      showToast('Failed to update: ' + e.message, 'error');
+    }
+  }
+
+  function openDeleteModal(id) {
+    document.getElementById('delete-id').value = id;
+    openModal('delete-modal');
+  }
+
+  async function confirmDelete() {
+    const id = document.getElementById('delete-id').value;
+    try {
+      await apiCall('/transactions', 'DELETE', { id });
+      closeModal('delete-modal');
+      showToast('Transaction deleted', 'info');
+      loadTransactions();
+    } catch (e) {
+      showToast('Failed to delete: ' + e.message, 'error');
+    }
+  }
+
+</script>
+</body>
+</html>

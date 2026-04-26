@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Monthly Report Ã¢â‚¬â€œ Smart Finance Tracker</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<div class="app-wrapper">
+
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon">Ã¢â€šÂ¹</div>
+      <h1>Finance<br>Tracker</h1>
+      <span>Smart Money Manager</span>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-label">Overview</div>
+      <a href="dashboard.html" class="nav-link"><span class="icon">Ã°Å¸â€œÅ </span> Dashboard</a>
+      <div class="nav-label">Manage</div>
+      <a href="transactions.html" class="nav-link"><span class="icon">Ã°Å¸â€™Â¸</span> Transactions</a>
+      <a href="index.html"        class="nav-link"><span class="icon">Ã¢Å¾â€¢</span> Add Transaction</a>
+      <a href="budgets.html"      class="nav-link"><span class="icon">Ã°Å¸Å½Â¯</span> Budgets</a>
+      <div class="nav-label">Reports</div>
+      <a href="analytics.html"    class="nav-link"><span class="icon">Ã°Å¸â€œË†</span> Analytics</a>
+      <a href="report.html"       class="nav-link active"><span class="icon">Ã°Å¸â€œâ€¹</span> Monthly Report</a>
+    </nav>
+  </aside>
+
+  <main class="main-content">
+
+    <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:16px">
+      <div>
+        <h2>Monthly Report</h2>
+        <p>A full breakdown of income, expenses, and savings for any month.</p>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:10px">
+        <label style="color:var(--text-muted);font-size:.85rem">Select Month:</label>
+        <select id="month-picker"
+                style="background:var(--bg-card);border:1px solid var(--border-light);border-radius:8px;
+                       color:var(--text-primary);padding:9px 14px;font-family:DM Sans,sans-serif;
+                       font-size:.875rem;outline:none;cursor:pointer"
+                onchange="loadReport(this.value)">
+          <option value="">Loading monthsÃ¢â‚¬Â¦</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="report-content">
+      <div class="spinner" style="margin-top:60px"></div>
+    </div>
+
+  </main>
+</div>
+
+<div id="toast-container"></div>
+<script src="../assets/js/app.js"></script>
+<script>
+
+const REPORT_API = '/FinanceTracker/report';
+const COLORS = ['#26c980','#4fa8f0','#f5b942','#f05050','#a78bfa','#fb7185','#34d399','#60a5fa'];
+
+let pieChartInstance  = null;
+let barChartInstance  = null;
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await populateMonthPicker();
+});
+
+async function populateMonthPicker() {
+  try {
+    const res    = await fetch(REPORT_API + '/months');
+    const months = await res.json();
+    const sel    = document.getElementById('month-picker');
+
+    if (!months.length) {
+      sel.innerHTML = '<option>No data yet</option>';
+      document.getElementById('report-content').innerHTML =
+        '<div class="empty-state"><div class="empty-icon">Ã°Å¸â€œâ€¹</div><p>Add some transactions to generate a report.</p></div>';
+      return;
+    }
+
+    sel.innerHTML = months.map(m => {
+      const [y, mo] = m.split('-');
+      const label   = new Date(y, mo - 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+      return `<option value="${m}">${label}</option>`;
+    }).join('');
+
+    await loadReport(months[0]);
+
+  } catch (e) {
+    showToast('Could not load month list', 'error');
+    console.error(e);
+  }
+}
+
+async function loadReport(month) {
+  if (!month) return;
+  document.getElementById('report-content').innerHTML = '<div class="spinner" style="margin-top:40px"></div>';
+
+  try {
+    const res  = await fetch(`${REPORT_API}/monthly?m=${month}`);
+    const data = await res.json();
+    renderReport(data);
+  } catch (e) {
+    showToast('Failed to load report', 'error');
+    document.getElementById('report-content').innerHTML =
+      '<div class="empty-state"><div class="empty-icon">Ã¢ÂÅ’</div><p>Could not load report. Is the server running?</p></div>';
+  }
+}
+
+function renderReport(data) {
+  const [y, mo] = data.month.split('-');
+  const monthLabel = new Date(y, mo - 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+
+  const income     = parseFloat(data.income)  || 0;
+  const expense    = parseFloat(data.expense) || 0;
+  const savings    = parseFloat(data.savings) || 0;
+  const rate       = parseFloat(data.savingsRate) || 0;
+  const topCat     = data.topCategory || 'N/A';
+  const catBreakdown = data.categoryBreakdown || {};
+  const dailyPat  = data.dailyPattern  || {};
+
+  const rateColor  = rate >= 20 ? 'var(--green)' : rate >= 10 ? 'var(--yellow)' : 'var(--red)';
+  const savingsColor = savings >= 0 ? 'var(--green)' : 'var(--red)';
+
+  document.getElementById('report-content').innerHTML = `
+
+    <div style="font-family:'DM Serif Display',serif;font-size:1.5rem;margin-bottom:24px;color:var(--text-primary)">
+      ${monthLabel} - Financial Summary
+    </div>
+
+    <div class="stats-grid" style="margin-bottom:28px">
+      <div class="stat-card income"   style="margin:0"><div class="stat-label">Income</div>    <div class="stat-value">${formatCurrency(income)}</div></div>
+      <div class="stat-card expense"  style="margin:0"><div class="stat-label">Expense</div>   <div class="stat-value">${formatCurrency(expense)}</div></div>
+      <div class="stat-card cashflow" style="margin:0">
+        <div class="stat-label">Net Savings</div>
+        <div class="stat-value" style="color:${savingsColor}">${formatCurrency(savings)}</div>
+      </div>
+      <div class="stat-card savings"  style="margin:0">
+        <div class="stat-label">Savings Rate</div>
+        <div class="stat-value" style="color:${rateColor}">${rate}%</div>
+        <div class="stat-sub">${rate >= 20 ? 'Ã¢Å“â€¦ Excellent' : rate >= 10 ? 'Ã¢Å¡Â Ã¯Â¸Â Moderate' : 'Ã¢ÂÅ’ Low'}</div>
+      </div>
+    </div>
+
+    ${topCat !== 'N/A' ? `
+    <div class="insight-banner" style="margin-bottom:24px">
+      Ã°Å¸â€™Â¡ <span>Your highest spending category in ${monthLabel} was <strong>${topCat}</strong>.
+      ${catBreakdown[topCat] ? `You spent <strong>${formatCurrency(catBreakdown[topCat])}</strong> here.` : ''}</span>
+    </div>` : ''}
+
+    <div class="charts-grid">
+      <div class="card">
+        <div class="card-title">Expense by Category</div>
+        <canvas id="rpt-pie" height="240"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-title">Spending by Day of Week</div>
+        <canvas id="rpt-day" height="240"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Category Breakdown</div>
+      ${Object.keys(catBreakdown).length === 0
+        ? '<div class="empty-state"><p>No expense transactions this month.</p></div>'
+        : `<div class="table-wrapper"><table>
+            <thead><tr><th>Category</th><th>Amount</th><th>% of Expenses</th></tr></thead>
+            <tbody>
+              ${Object.entries(catBreakdown).map(([cat, amt]) => {
+                const pct = expense > 0 ? (parseFloat(amt) / expense * 100).toFixed(1) : 0;
+                return `<tr>
+                  <td>${cat}</td>
+                  <td class="amount-expense">${formatCurrency(amt)}</td>
+                  <td>
+                    <div style="display:flex;align-items:center;gap:10px">
+                      <div style="flex:1;background:var(--bg-base);border-radius:20px;height:5px;overflow:hidden">
+                        <div style="height:100%;width:${pct}%;background:var(--green);border-radius:20px"></div>
+                      </div>
+                      <span style="color:var(--text-muted);font-size:.82rem;min-width:36px">${pct}%</span>
+                    </div>
+                  </td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table></div>`
+      }
+    </div>
+
+    <div style="text-align:right;margin-top:8px">
+      <button class="btn btn-ghost" onclick="exportMonth('${data.month}')">Ã¢Â¬â€¡ Export ${monthLabel} as CSV</button>
+    </div>
+  `;
+
+  requestAnimationFrame(() => {
+    renderPieChart(catBreakdown);
+    renderDayChart(dailyPat);
+  });
+}
+
+function renderPieChart(catBreakdown) {
+  const labels = Object.keys(catBreakdown);
+  const values = Object.values(catBreakdown).map(v => parseFloat(v)||0);
+  if (!labels.length) return;
+
+  new Chart(document.getElementById('rpt-pie'), {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data: values, backgroundColor: COLORS, borderWidth: 0, hoverOffset: 8 }] },
+    options: {
+      cutout: '58%',
+      plugins: {
+        legend: { position: 'bottom', labels: { color:'#8892aa', font:{ family:'DM Sans' }, padding: 10 } },
+        tooltip: { callbacks: { label: ctx => ` Ã¢â€šÂ¹${ctx.parsed.toLocaleString('en-IN',{minimumFractionDigits:2})}` } }
+      }
+    }
+  });
+}
+
+function renderDayChart(dailyPat) {
+  const labels = Object.keys(dailyPat);
+  const values = Object.values(dailyPat).map(v => parseFloat(v)||0);
+
+  new Chart(document.getElementById('rpt-day'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Expense',
+        data: values,
+        backgroundColor: labels.map((_,i) => COLORS[i % COLORS.length]),
+        borderRadius: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#505870' }, grid: { color: '#252935' } },
+        y: { ticks: { color: '#505870', callback: v => 'Ã¢â€šÂ¹' + v.toLocaleString('en-IN') }, grid: { color: '#252935' } }
+      }
+    }
+  });
+}
+
+function exportMonth(month) {
+  const [y, m] = month.split('-');
+  const label  = new Date(y, m-1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+
+  window.location.href = '/FinanceTracker/export/csv';
+  showToast(`Downloading ${label} dataÃ¢â‚¬Â¦`, 'info');
+}
+
+</script>
+</body>
+</html>

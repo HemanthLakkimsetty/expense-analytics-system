@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard Ã¢â‚¬â€œ Smart Finance Tracker</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<div class="app-wrapper">
+
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon">Ã¢â€šÂ¹</div>
+      <h1>Finance<br>Tracker</h1>
+      <span>Smart Money Manager</span>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-label">Overview</div>
+      <a href="dashboard.html" class="nav-link active">
+        <span class="icon">Ã°Å¸â€œÅ </span> Dashboard
+      </a>
+      <div class="nav-label">Manage</div>
+      <a href="transactions.html" class="nav-link">
+        <span class="icon">Ã°Å¸â€™Â¸</span> Transactions
+      </a>
+      <a href="index.html"     class="nav-link"><span class="icon">Ã¢Å¾â€¢</span> Add Transaction</a>
+      <a href="budgets.html"   class="nav-link"><span class="icon">Ã°Å¸Å½Â¯</span> Budgets</a>
+      <div class="nav-label">Reports</div>
+      <a href="analytics.html" class="nav-link"><span class="icon">Ã°Å¸â€œË†</span> Analytics</a>
+      <a href="report.html"    class="nav-link"><span class="icon">Ã°Å¸â€œâ€¹</span> Monthly Report</a>
+    </nav>
+  </aside>
+
+  <main class="main-content">
+
+    <div class="page-header">
+      <h2>Dashboard</h2>
+      <p id="date-label">Loading...</p>
+    </div>
+
+    <div id="insight-area"></div>
+
+    <div class="stats-grid">
+      <div class="stat-card income">
+        <div class="stat-label">Total Income</div>
+        <div class="stat-value" id="total-income">-</div>
+        <div class="stat-sub">All time</div>
+      </div>
+      <div class="stat-card expense">
+        <div class="stat-label">Total Expense</div>
+        <div class="stat-value" id="total-expense">-</div>
+        <div class="stat-sub">All time</div>
+      </div>
+      <div class="stat-card cashflow">
+        <div class="stat-label">Cash Flow</div>
+        <div class="stat-value" id="cash-flow">-</div>
+        <div class="stat-sub">Income Ã¢Ë†â€™ Expense</div>
+      </div>
+      <div class="stat-card savings">
+        <div class="stat-label">Savings</div>
+        <div class="stat-value" id="savings">-</div>
+        <div class="stat-sub">Net retained</div>
+      </div>
+    </div>
+
+    <div class="charts-grid">
+
+      <div class="card">
+        <div class="card-title">Monthly Overview</div>
+        <canvas id="bar-chart" height="220"></canvas>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Expense Breakdown</div>
+        <canvas id="pie-chart" height="220"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        Recent Transactions
+        <a href="transactions.html" class="btn btn-ghost btn-sm">View All Ã¢â€ â€™</a>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Type</th>
+              <th>Category</th>
+              <th>Amount</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody id="recent-table-body">
+            <tr><td colspan="5"><div class="spinner"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<div id="toast-container"></div>
+
+<script src="../assets/js/app.js"></script>
+<script>
+
+  const COLORS = [
+    '#26c980','#4fa8f0','#f5b942','#f05050',
+    '#a78bfa','#fb7185','#34d399','#60a5fa'
+  ];
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    document.getElementById('date-label').textContent =
+      new Date().toLocaleDateString('en-IN', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+
+    try {
+      await Promise.all([
+        loadSummary(),
+        loadMonthlyChart(),
+        loadCategoryChart(),
+        loadRecentTransactions(),
+        loadInsights()
+      ]);
+    } catch (err) {
+      showToast('Failed to load dashboard data', 'error');
+      console.error(err);
+    }
+  });
+
+  async function loadSummary() {
+    const data = await apiCall('/dashboard');
+    document.getElementById('total-income').textContent  = formatCurrency(data.totalIncome);
+    document.getElementById('total-expense').textContent = formatCurrency(data.totalExpense);
+    document.getElementById('cash-flow').textContent     = formatCurrency(data.cashFlow);
+    document.getElementById('savings').textContent       = formatCurrency(data.savings);
+  }
+
+  async function loadMonthlyChart() {
+    const data = await apiCall('/analytics/monthly');
+
+    const labels  = data.map(d => {
+      const [yr, mo] = d.month.split('-');
+      return new Date(yr, mo - 1).toLocaleDateString('en-IN', { month:'short', year:'2-digit' });
+    });
+    const incomes  = data.map(d => parseFloat(d.income)  || 0);
+    const expenses = data.map(d => parseFloat(d.expense) || 0);
+
+    new Chart(document.getElementById('bar-chart'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { label: 'Income',  data: incomes,  backgroundColor: 'rgba(38,201,128,0.7)',  borderRadius: 6 },
+          { label: 'Expense', data: expenses, backgroundColor: 'rgba(240, 80, 80,0.7)', borderRadius: 6 }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { labels: { color: '#8892aa', font: { family: 'DM Sans' } } } },
+        scales: {
+          x: { ticks: { color: '#505870' }, grid: { color: '#252935' } },
+          y: { ticks: { color: '#505870', callback: v => 'Ã¢â€šÂ¹' + v.toLocaleString('en-IN') }, grid: { color: '#252935' } }
+        }
+      }
+    });
+  }
+
+  async function loadCategoryChart() {
+    const data   = await apiCall('/analytics/category');
+    const labels = Object.keys(data);
+    const values = Object.values(data).map(v => parseFloat(v) || 0);
+
+    if (labels.length === 0) {
+      document.getElementById('pie-chart').parentElement.innerHTML +=
+        '<p style="color:var(--text-muted);text-align:center;font-size:.85rem">No expense data yet</p>';
+      return;
+    }
+
+    new Chart(document.getElementById('pie-chart'), {
+      type: 'doughnut',
+      data: {
+        labels,
+        datasets: [{ data: values, backgroundColor: COLORS, borderWidth: 0, hoverOffset: 8 }]
+      },
+      options: {
+        responsive: true,
+        cutout: '60%',
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { color: '#8892aa', font: { family: 'DM Sans' }, padding: 12 }
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx => ` Ã¢â€šÂ¹${ctx.parsed.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+            }
+          }
+        }
+      }
+    });
+  }
+
+  async function loadRecentTransactions() {
+    const all = await apiCall('/transactions');
+    const recent = all.slice(0, 8);  
+
+    const tbody = document.getElementById('recent-table-body');
+    if (recent.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">Ã°Å¸â€”â€šÃ¯Â¸Â</div><p>No transactions yet</p></div></td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = recent.map(t => `
+      <tr>
+        <td>${formatDate(t.date)}</td>
+        <td><span class="type-badge ${t.type.toLowerCase()}">${t.type}</span></td>
+        <td>${t.category}</td>
+        <td class="amount-${t.type.toLowerCase()}">${formatCurrency(t.amount)}</td>
+        <td style="color:var(--text-muted)">${t.description || '-'}</td>
+      </tr>
+    `).join('');
+  }
+
+  async function loadInsights() {
+    try {
+      const res = await apiCall('/analytics/top-category');
+      if (res.category && res.category !== 'N/A') {
+        document.getElementById('insight-area').innerHTML = `
+          <div class="insight-banner">
+            Ã°Å¸â€™Â¡ <strong>Smart Insight:</strong>
+            Your highest spending category this month is <strong>${res.category}</strong>.
+            Consider reviewing your budget for this area.
+          </div>`;
+      }
+    } catch (e) {  }
+  }
+</script>
+
+</body>
+</html>
