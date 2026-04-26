@@ -41,20 +41,20 @@ INSERT INTO categories (name, type) VALUES
     ('Other Expense', 'Expense');
 
 INSERT INTO transactions (date, type, category, amount, description) VALUES
-    (CURDATE() - INTERVAL 25 DAY, 'Income',  'Salary',        55000.00, 'Monthly salary - March'),
-    (CURDATE() - INTERVAL 20 DAY, 'Expense', 'Rent',          12000.00, 'Monthly house rent'),
-    (CURDATE() - INTERVAL 18 DAY, 'Expense', 'Food',           3200.00, 'Grocery shopping'),
-    (CURDATE() - INTERVAL 15 DAY, 'Income',  'Freelance',      8000.00, 'Web design project'),
-    (CURDATE() - INTERVAL 12 DAY, 'Expense', 'Transport',      1500.00, 'Monthly bus pass + auto'),
-    (CURDATE() - INTERVAL 10 DAY, 'Expense', 'Utilities',      2200.00, 'Electricity + internet bill'),
-    (CURDATE() - INTERVAL  8 DAY, 'Expense', 'Entertainment',  1800.00, 'OTT subscriptions + movie'),
-    (CURDATE() - INTERVAL  5 DAY, 'Expense', 'Healthcare',     2500.00, 'Doctor visit + medicines'),
+    (CURDATE() - INTERVAL 25 DAY, 'Income',  'Salary',        28000.00, 'Monthly salary - March'),
+    (CURDATE() - INTERVAL 20 DAY, 'Expense', 'Rent',          8000.00, 'Monthly house rent'),
+    (CURDATE() - INTERVAL 18 DAY, 'Expense', 'Food',           320.00, 'Grocery shopping'),
+    (CURDATE() - INTERVAL 15 DAY, 'Income',  'Freelance',      800.00, 'Web design project'),
+    (CURDATE() - INTERVAL 12 DAY, 'Expense', 'Transport',      150.00, 'Monthly bus pass + auto'),
+    (CURDATE() - INTERVAL 10 DAY, 'Expense', 'Utilities',      185.00, 'Electricity + internet bill'),
+    (CURDATE() - INTERVAL  8 DAY, 'Expense', 'Entertainment',  800.00, 'OTT subscriptions + movie'),
+    (CURDATE() - INTERVAL  5 DAY, 'Expense', 'Healthcare',     500.00, 'Doctor visit + medicines'),
     (CURDATE() - INTERVAL  3 DAY, 'Expense', 'Shopping',       4500.00, 'Clothes and shoes'),
-    (CURDATE() - INTERVAL  1 DAY, 'Expense', 'Food',           1200.00, 'Restaurant dinner');
+    (CURDATE() - INTERVAL  1 DAY, 'Expense', 'Food',           900.00, 'Restaurant dinner');
 
 INSERT INTO budgets (category, monthly_limit) VALUES
-    ('Food',          5000.00),
-    ('Transport',     2000.00),
-    ('Entertainment', 2000.00),
-    ('Shopping',      5000.00),
-    ('Utilities',     3000.00);
+    ('Food',          2000.00),
+    ('Transport',     1000.00),
+    ('Entertainment', 1000.00),
+    ('Shopping',      3000.00),
+    ('Utilities',     2000.00);
